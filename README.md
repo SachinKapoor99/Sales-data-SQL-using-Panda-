@@ -1,1 +1,1 @@
-# Sales-data-SQL-using-Panda-
+# Sales-data-SQL-using-python-
