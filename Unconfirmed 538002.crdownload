@@ -1,0 +1,110 @@
+import sqlite3
+import random
+import pandas as pd
+import matplotlib
+matplotlib.use('Agg')  # Tkinter avoid karne ke liye non-interactive backend
+import matplotlib.pyplot as plt
+from pathlib import Path
+
+# Function: Database banane ka kaam
+def ensure_db(db_path: Path):
+    if db_path.exists():
+        return
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS sales (
+        product  TEXT,
+        quantity INTEGER,
+        price    REAL
+    );
+    """)
+
+    # Product catalog with fixed prices
+    product_catalog = {
+        "Product A": 49.0,
+        "Product B": 79.0,
+        "Product C": 99.0,
+        "Product D": 129.0,
+        "Product E": 159.0,
+        "Product F": 199.0,
+        "Product G": 249.0,
+        "Product H": 299.0,
+        "Product I": 349.0,
+        "Product J": 399.0,
+    }
+
+    random.seed(42)
+
+    # 600 sample sales rows
+    rows = []
+    for _ in range(600):
+        prod = random.choices(
+            population=list(product_catalog.keys()),
+            weights=[14, 12, 11, 10, 10, 9, 9, 8, 4, 3],  # popularity
+            k=1
+        )[0]
+        qty = random.randint(1, 12)
+        price = float(product_catalog[prod])
+        rows.append((prod, qty, price))
+
+    cur.executemany(
+        "INSERT INTO sales (product, quantity, price) VALUES (?, ?, ?);",
+        rows
+    )
+    conn.commit()
+    conn.close()
+
+# Function: Main task execution
+def main():
+    base = Path(".")
+    db_path = base / "sales_data.db"
+
+    # Ensure database exists
+    ensure_db(db_path)
+
+    # SQL query for summary
+    conn = sqlite3.connect(db_path)
+    query = """
+    SELECT 
+        product, 
+        SUM(quantity) AS total_qty, 
+        ROUND(SUM(quantity * price), 2) AS revenue
+    FROM sales
+    GROUP BY product
+    ORDER BY revenue DESC;
+    """
+    df = pd.read_sql_query(query, conn)
+
+    overall = pd.read_sql_query("""
+    SELECT 
+        SUM(quantity) AS total_qty,
+        ROUND(SUM(quantity * price), 2) AS revenue
+    FROM sales;
+    """, conn)
+
+    conn.close()
+
+    # Print results
+    print("=== Sales Summary by Product ===")
+    print(df)
+    print("\n=== Overall Totals ===")
+    print(overall)
+
+    # Plot bar chart (revenue by product)
+    plt.figure()
+    plt.bar(df["product"], df["revenue"])
+    plt.title("Revenue by Product")
+    plt.xlabel("Product")
+    plt.ylabel("Revenue")
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+
+    # Save chart
+    chart_path = base / "sales_chart.png"
+    plt.savefig(chart_path)
+    print(f"\n✅ Chart saved successfully at: {chart_path.resolve()}")
+
+# Run main
+if __name__ == "__main__":
+    main()
